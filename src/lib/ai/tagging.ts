@@ -11,6 +11,7 @@ export interface DetectedItem {
   boundingBox: { x: number; y: number; width: number; height: number };
   confidence: number;
   name: string;
+  description: string;
 }
 
 export interface TaggingResult {
@@ -33,8 +34,13 @@ function pick<T>(arr: T[], n = 1): T[] {
 
 const SCHEMA_PROMPT = `You are a fashion vision system. Detect every distinct clothing/accessory item in the image.
 Return ONLY valid JSON matching:
-{"items":[{"name":string,"category":"Outerwear"|"Tops"|"Knitwear"|"Dresses"|"Bottoms"|"Denim"|"Activewear"|"Footwear"|"Bags"|"Accessories"|"Jewelry","colors":string[],"fabric":string,"pattern":string,"seasons":("Spring"|"Summer"|"Fall"|"Winter")[],"boundingBox":{"x":number,"y":number,"width":number,"height":number},"confidence":number}]}
-Bounding box coordinates are normalized 0-1 (x,y = top-left).`;
+{"items":[{"name":string,"category":"Outerwear"|"Tops"|"Knitwear"|"Dresses"|"Bottoms"|"Denim"|"Activewear"|"Footwear"|"Bags"|"Accessories"|"Jewelry","colors":string[],"fabric":string,"pattern":string,"seasons":("Spring"|"Summer"|"Fall"|"Winter")[],"boundingBox":{"x":number,"y":number,"width":number,"height":number},"confidence":number,"description":string}]}
+Bounding box coordinates are normalized 0-1 (x,y = top-left).
+"description" must be a single detailed sentence describing exactly what this
+specific item looks like — cut/silhouette, distinguishing graphics or text,
+trim details, closures, texture — precise enough that someone could recreate
+or shop for the exact piece from the sentence alone. Do not describe the
+person wearing it or the surrounding scene.`;
 
 /**
  * Detects and tags clothing items in an image.
@@ -71,27 +77,39 @@ async function callGemini(imageDataUrl: string, apiKey: string): Promise<Tagging
   if (!match) throw new Error("Expected a base64 data URL image");
   const [, mimeType, base64Data] = match;
 
-  const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-    {
+  const model = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const body = JSON.stringify({
+    contents: [
+      {
+        parts: [
+          { text: `${SCHEMA_PROMPT}\n\nTag every clothing item in this image.` },
+          { inline_data: { mime_type: mimeType, data: base64Data } },
+        ],
+      },
+    ],
+    generationConfig: { responseMimeType: "application/json" },
+  });
+
+  // The free tier occasionally returns a transient 503 ("high demand") —
+  // worth a few retries with backoff before falling all the way back to
+  // mock data (which starves segmentation of a real, precise box).
+  const maxAttempts = 4;
+  let res: Response | undefined;
+  let lastError = "";
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { text: `${SCHEMA_PROMPT}\n\nTag every clothing item in this image.` },
-              { inline_data: { mime_type: mimeType, data: base64Data } },
-            ],
-          },
-        ],
-        generationConfig: { responseMimeType: "application/json" },
-      }),
-    }
-  );
+      body,
+    });
+    if (res.ok) break;
+    lastError = `${res.status} ${await res.text()}`;
+    if (res.status !== 503 || attempt === maxAttempts - 1) break;
+    await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+  }
 
-  if (!res.ok) throw new Error(`Gemini vision request failed: ${res.status} ${await res.text()}`);
+  if (!res || !res.ok) throw new Error(`Gemini vision request failed: ${lastError}`);
   const data = await res.json();
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) throw new Error("Gemini returned no content");
@@ -133,12 +151,15 @@ function mockTagging(): TaggingResult {
   const count = 1 + Math.floor(Math.random() * 3);
   const items: DetectedItem[] = Array.from({ length: count }).map((_, i) => {
     const category = pick(CATEGORIES)[0];
+    const colors = pick(COLOR_POOL, 1 + Math.floor(Math.random() * 2));
+    const fabric = pick(FABRICS)[0];
+    const pattern = pick(PATTERNS)[0];
     return {
       name: `${category} item`,
       category,
-      colors: pick(COLOR_POOL, 1 + Math.floor(Math.random() * 2)),
-      fabric: pick(FABRICS)[0],
-      pattern: pick(PATTERNS)[0],
+      colors,
+      fabric,
+      pattern,
       seasons: pick(SEASONS, 1 + Math.floor(Math.random() * 2)) as Season[],
       boundingBox: {
         x: 0.1 + i * 0.05,
@@ -147,6 +168,7 @@ function mockTagging(): TaggingResult {
         height: 0.5,
       },
       confidence: 0.75 + Math.random() * 0.2,
+      description: `A ${pattern.toLowerCase()} ${colors.join(" and ")} ${fabric.toLowerCase()} ${category.toLowerCase()}.`,
     };
   });
   return { items, usedModel: "mock-detector" };

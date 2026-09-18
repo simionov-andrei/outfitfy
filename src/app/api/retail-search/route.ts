@@ -3,7 +3,7 @@ import { findTieredMatches } from "@/lib/ai/retail";
 import type { ClothingCategory } from "@/lib/types";
 
 export async function POST(request: Request) {
-  const { category, colors, fabric, name } = await request.json();
+  const { category, colors, fabric, name, pattern, publicImageUrl } = await request.json();
 
   if (!category || !name) {
     return NextResponse.json({ error: "category and name are required" }, { status: 400 });
@@ -13,7 +13,9 @@ export async function POST(request: Request) {
     category as ClothingCategory,
     colors ?? [],
     fabric ?? "",
-    name
+    name,
+    pattern,
+    publicImageUrl
   );
   return NextResponse.json({ matches });
 }

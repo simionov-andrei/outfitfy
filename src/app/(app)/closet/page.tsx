@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Search, SlidersHorizontal, Shirt as ShirtIcon } from "lucide-react";
 import { useClosetItems } from "@/hooks/use-db";
 import { seedDemoClosetItems } from "@/lib/seed";
-import { CATEGORIES, SEASONS, TIER_LABELS, type PriceTier } from "@/lib/types";
+import { CATEGORIES, TIER_LABELS, type PriceTier } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -23,7 +23,6 @@ export default function ClosetPage() {
   const items = useClosetItems();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<string>("all");
-  const [season, setSeason] = useState<string>("all");
   const [tier, setTier] = useState<PriceTier | "all">("all");
   const [sort, setSort] = useState<"newest" | "underused" | "price-desc">("newest");
   const [openItem, setOpenItem] = useState<ClosetItem | null>(null);
@@ -35,7 +34,6 @@ export default function ClosetPage() {
       if (search && !`${item.name} ${item.colors.join(" ")}`.toLowerCase().includes(search.toLowerCase()))
         return false;
       if (category !== "all" && item.category !== category) return false;
-      if (season !== "all" && !item.seasons.includes(season as (typeof SEASONS)[number])) return false;
       if (tier !== "all" && !item.retailMatches.some((m) => m.tier === tier)) return false;
       return true;
     });
@@ -48,7 +46,7 @@ export default function ClosetPage() {
       result = [...result].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     }
     return result;
-  }, [items, search, category, season, tier, sort]);
+  }, [items, search, category, tier, sort]);
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-5">
@@ -80,20 +78,6 @@ export default function ClosetPage() {
               {CATEGORIES.map((c) => (
                 <SelectItem key={c} value={c}>
                   {c}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={season} onValueChange={setSeason}>
-            <SelectTrigger size="sm" className="w-[120px]">
-              <SelectValue placeholder="Season" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All seasons</SelectItem>
-              {SEASONS.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {s}
                 </SelectItem>
               ))}
             </SelectContent>

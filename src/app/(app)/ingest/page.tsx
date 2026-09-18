@@ -10,8 +10,8 @@ export default function IngestPage() {
       <div>
         <h1 className="text-xl font-semibold">Ingest</h1>
         <p className="text-sm text-muted-foreground">
-          Every photo runs through detection & tagging, background segmentation, and tiered retail matching —
-          then lands directly in your local closet.
+          Every photo runs through detection & tagging, background segmentation, AI product-photo
+          generation, and tiered retail matching — then lands directly in your local closet.
         </p>
       </div>
 
@@ -25,7 +25,7 @@ export default function IngestPage() {
       <Card>
         <CardHeader>
           <CardTitle>Processing queue</CardTitle>
-          <CardDescription>Detection → Segmentation → Retail matching → Closet</CardDescription>
+          <CardDescription>Detection → Segmentation → AI Photo → Retail matching → Closet</CardDescription>
         </CardHeader>
         <CardContent>
           <IngestJobList />

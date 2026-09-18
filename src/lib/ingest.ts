@@ -26,9 +26,11 @@ async function patchJob(id: string, patch: Partial<IngestJob>) {
 
 /**
  * Drives one ingestion job end-to-end:
- *  A) Detection & Tagging (vision LLM)
- *  B) Segmentation (background removal -> transparent product PNG)
- *  C) Tiered retail matching + save into the local digital closet
+ *  A) Detection & Tagging (vision LLM) — includes a detailed description per item
+ *  B) Segmentation (background removal -> transparent cutout)
+ *  C) AI thumbnail generation (polished product photo, guided by the description)
+ *  D) Tiered retail matching (text description + the generated photo when public)
+ *  E) Save into the local digital closet
  */
 export async function processIngestJob(jobId: string) {
   const job = await db.ingestJobs.get(jobId);
@@ -49,11 +51,13 @@ export async function processIngestJob(jobId: string) {
       return;
     }
 
-    await patchJob(jobId, { status: "segmenting", progress: 40 });
+    await patchJob(jobId, { status: "segmenting", progress: 30 });
 
     const resultItemIds: string[] = [];
     for (let i = 0; i < detected.length; i++) {
       const d = detected[i];
+      const stepBase = 30 + Math.round((i / detected.length) * 65);
+      const stepSpan = Math.round(65 / detected.length);
 
       const segRes = await fetch("/api/segment", {
         method: "POST",
@@ -67,12 +71,26 @@ export async function processIngestJob(jobId: string) {
         }),
       });
       if (!segRes.ok) throw new Error("Segmentation failed");
-      const { imageUrl: segmentedUrl } = await segRes.json();
+      const { imageUrl: segmentedUrl, usedModel: segmentationModel } = await segRes.json();
 
-      await patchJob(jobId, {
-        status: "matching",
-        progress: 40 + Math.round(((i + 0.5) / detected.length) * 40),
-      });
+      await patchJob(jobId, { status: "generating", progress: stepBase + Math.round(stepSpan * 0.4) });
+
+      // Skip the (paid, guaranteed-to-fail) generation call entirely when
+      // segmentation itself already fell back to a mock SVG placeholder —
+      // flux-kontext-pro only accepts jpeg/png/gif/webp reference images.
+      let thumbnailUrl = segmentedUrl;
+      let thumbnailPublicUrl: string | undefined;
+      if (segmentationModel === "segment-anything") {
+        const thumbRes = await fetch("/api/thumbnail", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageDataUrl: segmentedUrl, description: d.description, fabric: d.fabric }),
+        });
+        if (!thumbRes.ok) throw new Error("Thumbnail generation failed");
+        ({ imageUrl: thumbnailUrl, publicUrl: thumbnailPublicUrl } = await thumbRes.json());
+      }
+
+      await patchJob(jobId, { status: "matching", progress: stepBase + Math.round(stepSpan * 0.7) });
 
       const matchRes = await fetch("/api/retail-search", {
         method: "POST",
@@ -82,6 +100,13 @@ export async function processIngestJob(jobId: string) {
           colors: d.colors,
           fabric: d.fabric,
           name: d.name,
+          // Structured, keyword-style tags only — not the free-text
+          // description, which reads more like a sentence than a shopping
+          // query and over-indexes search results on incidental details.
+          pattern: d.pattern,
+          // The (temporary, unpersisted) public Replicate URL — the stored
+          // imageUrl is now always a data URL, which Google Lens can't fetch.
+          publicImageUrl: thumbnailPublicUrl,
         }),
       });
       if (!matchRes.ok) throw new Error("Retail matching failed");
@@ -97,7 +122,9 @@ export async function processIngestJob(jobId: string) {
         fabric: d.fabric,
         pattern: d.pattern,
         seasons: d.seasons,
-        imageUrl: segmentedUrl,
+        description: d.description,
+        imageUrl: thumbnailUrl,
+        segmentedImageUrl: segmentedUrl,
         originalImageUrl: job.imageUrl,
         sourceType: job.sourceType,
         sourceUrl: job.sourceLabel,
@@ -112,7 +139,7 @@ export async function processIngestJob(jobId: string) {
       resultItemIds.push(closetItem.id);
 
       await patchJob(jobId, {
-        progress: 40 + Math.round(((i + 1) / detected.length) * 55),
+        progress: stepBase + stepSpan,
         resultItemIds,
       });
     }

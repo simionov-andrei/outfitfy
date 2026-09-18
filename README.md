@@ -36,7 +36,7 @@ Copy `.env.example` to `.env.local` and fill in what you want to go live:
 | Detection & tagging | `GEMINI_API_KEY` (preferred, free tier) or `OPENAI_API_KEY` (fallback) | Gemini 2.0 Flash vision / gpt-4o-mini vision |
 | Segmentation / background removal | `REPLICATE_API_TOKEN`, `REPLICATE_SAM_MODEL_VERSION` | Segment Anything on Replicate |
 | Virtual try-on | `REPLICATE_API_TOKEN`, `REPLICATE_VTON_MODEL_VERSION` | IDM-VTON on Replicate |
-| Tiered retail matching | `RETAIL_SEARCH_API_KEY`, `RETAIL_SEARCH_ENDPOINT` | Lykdat / Google Lens-style aggregator |
+| Tiered retail matching | `SERPAPI_API_KEY` (preferred, free tier) or `RETAIL_SEARCH_API_KEY`+`RETAIL_SEARCH_ENDPOINT` (custom aggregator) | SerpApi Google Shopping / your own endpoint |
 | Pinterest board import | `PINTEREST_CLIENT_ID`, `PINTEREST_CLIENT_SECRET` | Pinterest Developer API (OAuth) |
 | Cloud sync (optional) | `AUTH_SECRET` + one of `GOOGLE_CLIENT_ID`/`SECRET` or `GITHUB_CLIENT_ID`/`SECRET` | NextAuth |
 

@@ -49,7 +49,9 @@ export interface ClosetItem {
   fabric: string;
   pattern: string;
   seasons: Season[];
-  imageUrl: string; // segmented transparent PNG (data URL or object URL)
+  description: string; // rich visual description — feeds thumbnail generation + retail search
+  imageUrl: string; // final displayed thumbnail — AI-generated product photo when available
+  segmentedImageUrl?: string; // the raw SAM3 cutout, before thumbnail generation
   originalImageUrl?: string;
   sourceType: IngestSourceType;
   sourceUrl?: string;
@@ -110,6 +112,7 @@ export type IngestStatus =
   | "queued"
   | "tagging"
   | "segmenting"
+  | "generating"
   | "matching"
   | "done"
   | "error";

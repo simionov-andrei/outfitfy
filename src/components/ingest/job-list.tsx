@@ -10,6 +10,7 @@ const STATUS_LABEL: Record<string, string> = {
   queued: "Queued",
   tagging: "Detecting & tagging clothing (vision AI)",
   segmenting: "Removing background (segmentation)",
+  generating: "Generating realistic product photo",
   matching: "Finding tiered retail matches",
   done: "Added to closet",
   error: "Failed",

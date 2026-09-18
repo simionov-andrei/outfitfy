@@ -1,4 +1,5 @@
 import "server-only";
+import { runReplicatePrediction, firstOutputUrl } from "./replicate";
 
 export interface VtoInput {
   modelImageDataUrl: string;
@@ -32,32 +33,18 @@ export async function generateVirtualTryOn(input: VtoInput): Promise<{ imageUrl:
 }
 
 async function callIdmVton(input: VtoInput, token: string, version: string): Promise<string> {
-  const createRes = await fetch("https://api.replicate.com/v1/predictions", {
-    method: "POST",
-    headers: {
-      Authorization: `Token ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      version,
-      input: {
-        human_img: input.modelImageDataUrl,
-        garm_img: input.garmentImageDataUrls[0],
-      },
-    }),
+  const output = await runReplicatePrediction(token, version, {
+    human_img: input.modelImageDataUrl,
+    garm_img: input.garmentImageDataUrls[0],
   });
-  if (!createRes.ok) throw new Error(`Replicate create failed: ${createRes.status}`);
-  const prediction = await createRes.json();
+  const publicUrl = firstOutputUrl(output);
 
-  let result = prediction;
-  for (let i = 0; i < 40 && result.status !== "succeeded" && result.status !== "failed"; i++) {
-    await new Promise((r) => setTimeout(r, 1500));
-    const poll = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
-      headers: { Authorization: `Token ${token}` },
-    });
-    result = await poll.json();
-  }
-
-  if (result.status !== "succeeded") throw new Error("VTO generation did not complete");
-  return Array.isArray(result.output) ? result.output[0] : result.output;
+  // Same rule as thumbnail generation: Replicate's delivery URL is
+  // temporary. A saved outfit persists this image in IndexedDB, so it must
+  // be a permanent data URL, not a link that can expire later.
+  const imageRes = await fetch(publicUrl);
+  if (!imageRes.ok) throw new Error(`Failed to download VTO result image: ${imageRes.status}`);
+  const buf = Buffer.from(await imageRes.arrayBuffer());
+  const contentType = imageRes.headers.get("content-type") || "image/png";
+  return `data:${contentType};base64,${buf.toString("base64")}`;
 }

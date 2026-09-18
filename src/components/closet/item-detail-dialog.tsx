@@ -54,6 +54,9 @@ export function ItemDetailDialog({
                 </Badge>
               ))}
             </div>
+            {item.description && (
+              <p className="text-sm text-muted-foreground italic">&ldquo;{item.description}&rdquo;</p>
+            )}
             <p className="text-xs text-muted-foreground">
               Worn {item.wearCount} time{item.wearCount === 1 ? "" : "s"}
               {item.sourceType !== "manual" && ` · sourced from ${item.sourceType}`}
